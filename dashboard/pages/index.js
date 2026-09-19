@@ -3,10 +3,14 @@ import Nav from "../components/Nav";
 export default function Home() {
   return (
     <>
-      <Nav />
+      <Nav dark />
 
       <header className="hero hero-landing">
-        <h1 className="hero-title">HongHyun&apos;s Work Space</h1>
+        <h1 className="hero-title">
+          HongHyun&apos;s
+          <br />
+          Work Space
+        </h1>
       </header>
     </>
   );
