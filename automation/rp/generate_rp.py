@@ -16,8 +16,10 @@ import os
 import re
 import json
 import argparse
+import smtplib
 from copy import copy
 from datetime import date
+from email.message import EmailMessage
 
 import anthropic
 import openpyxl
@@ -198,6 +200,30 @@ def fill_template(data: dict, output_path: str):
     wb.save(output_path)
 
 
+def send_email_notification(file_path: str, meeting_name: str, to_email: str):
+    smtp_user = os.environ["SMTP_USER"]
+    smtp_password = os.environ["SMTP_PASSWORD"]
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[RP] {meeting_name} 회의록"
+    msg["From"] = smtp_user
+    msg["To"] = to_email
+    msg.set_content(f"'{meeting_name}' 회의록(RP)이 자동 생성되어 첨부파일로 보내드립니다.")
+
+    with open(file_path, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=os.path.basename(file_path),
+        )
+
+    with smtplib.SMTP(os.environ.get("SMTP_HOST", "smtp.gmail.com"), int(os.environ.get("SMTP_PORT", "587"))) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.send_message(msg)
+
+
 def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> str:
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
@@ -253,10 +279,17 @@ def main():
     fill_template(data, output_path)
     print(f"✅ 회의록 생성 완료: {output_path}")
 
-    if not args.no_upload:
+    to_email = os.environ.get("RP_EMAIL_TO")
+    if to_email and os.environ.get("SMTP_USER") and os.environ.get("SMTP_PASSWORD"):
+        send_email_notification(output_path, data.get("meeting_name", "RP"), to_email)
+        print(f"✅ 이메일 발송 완료: {to_email}")
+
+    if not args.no_upload and os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"):
         file_url = upload_to_supabase(output_path, data.get("meeting_name", "회의록"), args.date)
         save_to_supabase(data, args.date, file_url)
         print(f"✅ Supabase 업로드 완료: {file_url}")
+    elif not args.no_upload:
+        print("⚠️ SUPABASE_URL / SUPABASE_SERVICE_KEY가 설정되지 않아 Supabase 업로드를 건너뜁니다.")
 
 
 if __name__ == "__main__":

@@ -43,8 +43,8 @@
    ```
 4. **GitHub Secrets 등록** (repo Settings → Secrets and variables → Actions)
    - `ANTHROPIC_API_KEY`
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_KEY`
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (Supabase 저장을 쓸 경우)
+   - `SMTP_USER`, `SMTP_PASSWORD`, `RP_EMAIL_TO` (생성된 RP를 이메일로 받고 싶을 경우, 아래 참고)
 5. **대시보드 배포**
    - Vercel에 `dashboard/` 폴더를 GitHub 연동으로 배포
    - 환경변수(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)를 Vercel 프로젝트 설정에 등록
@@ -112,6 +112,18 @@ Plaud는 Zapier에서 **트리거 전용 앱**으로 제공됩니다(Plaud → �
 
 > 회의록을 Markdown 요약(`automation/meeting-minutes`)으로도 받고 싶다면, 같은 방식으로
 > Zap을 하나 더 만들고 `event_type`만 `"new-transcript"`로 바꾸면 `meeting-minutes.yml`이 실행됩니다.
+
+## 생성된 RP를 이메일로 받기 (선택)
+
+Supabase 설정 없이도, 생성된 `.xlsx`를 바로 메일로 받을 수 있습니다. Gmail 계정 기준:
+
+1. 이메일을 **보낼** Gmail 계정에서 [구글 계정 → 보안 → 2단계 인증](https://myaccount.google.com/security) 켜기 (앱 비밀번호는 2단계 인증이 켜져 있어야 발급 가능)
+2. [앱 비밀번호 발급 페이지](https://myaccount.google.com/apppasswords)에서 새 앱 비밀번호 생성 → 16자리 문자열 복사
+3. repo Settings → Secrets and variables → Actions에 아래 3개 등록
+   - `SMTP_USER`: 보내는 Gmail 주소 (예: `내계정@gmail.com`)
+   - `SMTP_PASSWORD`: 방금 발급받은 16자리 앱 비밀번호 (계정 로그인 비밀번호 아님)
+   - `RP_EMAIL_TO`: 받을 주소 (예: `jkim0723@gmail.com`)
+4. 셋 다 등록되면 `rp.yml` 실행 시 생성된 RP 파일이 자동으로 첨부되어 메일 발송됩니다. 하나라도 비어 있으면 이메일 단계는 조용히 건너뛰고 나머지(아티팩트/Supabase)는 그대로 진행됩니다.
 
 ## 보안 주의사항
 
