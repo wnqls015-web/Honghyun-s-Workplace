@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../lib/supabase";
 
 export default function Home() {
@@ -22,6 +23,9 @@ export default function Home() {
     <main style={{ maxWidth: 800, margin: "0 auto", padding: 24 }}>
       <h1>업무 자동화 대시보드</h1>
       <p>자동으로 생성된 회의록 및 업무 자료 모음</p>
+      <p>
+        <Link href="/rp">→ RP(사내 표준 양식 회의록) 보러가기</Link>
+      </p>
 
       {loading && <p>불러오는 중...</p>}
 
