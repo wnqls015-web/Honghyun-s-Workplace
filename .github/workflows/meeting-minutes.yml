@@ -1,0 +1,42 @@
+name: Meeting Minutes Automation
+
+# n8n/Zapier가 Plaud 웹훅을 받으면 GitHub repository_dispatch API를 호출해
+# 이 워크플로우를 트리거합니다.
+# 호출 예시 (n8n HTTP Request 노드):
+#   POST https://api.github.com/repos/<owner>/<repo>/dispatches
+#   Headers: Authorization: token <GITHUB_TOKEN>
+#   Body: { "event_type": "new-transcript",
+#           "client_payload": { "transcript_url": "...", "title": "...", "date": "..." } }
+
+on:
+  repository_dispatch:
+    types: [new-transcript]
+  workflow_dispatch: {}   # 수동 실행 테스트용
+
+jobs:
+  format-and-save:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 의존성 설치
+        run: pip install -r automation/meeting-minutes/requirements.txt
+
+      - name: 전사 파일 다운로드
+        run: |
+          curl -sL "${{ github.event.client_payload.transcript_url }}" -o transcript.txt
+
+      - name: 회의록 정리 및 Supabase 저장
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python automation/meeting-minutes/format_minutes.py \
+            --input transcript.txt \
+            --title "${{ github.event.client_payload.title }}" \
+            --date "${{ github.event.client_payload.date }}"
