@@ -95,6 +95,18 @@ h1, h2, h3, h4, p {
   background: linear-gradient(180deg, #fbfbfd 0%, #ffffff 100%);
 }
 
+.hero-landing {
+  min-height: calc(100vh - var(--nav-height));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+
+.hero-landing .hero-title {
+  font-size: 56px;
+}
+
 .hero-eyebrow {
   font-size: 14px;
   font-weight: 600;
@@ -313,6 +325,10 @@ table.rp-table tr:hover td {
   }
 
   .hero-title {
+    font-size: 34px;
+  }
+
+  .hero-landing .hero-title {
     font-size: 34px;
   }
 
