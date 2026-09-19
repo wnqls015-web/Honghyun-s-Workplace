@@ -84,20 +84,34 @@ RP 자동화(`automation/rp`)가 사내 표준 회의록 양식(`template.xlsx`)
 > 두 테이블 모두 RLS(Row Level Security)를 반드시 켜고, 로그인한 본인만 조회 가능하도록 정책을 설정하세요.
 > `rp-reports` Storage 버킷도 필요한 사용자만 다운로드 가능하도록 정책을 설정하세요.
 
-## 새 워크플로우 연결 방법 (n8n/Zapier)
+## Plaud → Zapier → GitHub 연결 방법 (RP 자동 생성)
 
-1. Plaud(또는 다른 녹음/전사 도구)의 웹훅이 전사 완료 시 n8n/Zapier를 트리거합니다.
-2. n8n/Zapier의 HTTP Request 노드에서 GitHub `repository_dispatch` API를 호출합니다.
-   - 회의록 Markdown 요약: `event_type: "new-transcript"` → `meeting-minutes.yml` 실행
-   - RP(사내 표준 엑셀 양식) 생성: `event_type: "new-rp-transcript"` → `rp.yml` 실행
-   ```
-   POST https://api.github.com/repos/<owner>/<repo>/dispatches
-   Headers: Authorization: token <GITHUB_TOKEN>
-   Body: { "event_type": "new-rp-transcript",
-           "client_payload": { "transcript_url": "...", "title": "...", "date": "..." } }
-   ```
-3. 해당 GitHub Actions 워크플로우가 전사 파일을 받아 Claude API로 정리하고 Supabase에 저장합니다.
-4. `dashboard/`(`/` 또는 `/rp`)에서 결과를 바로 확인할 수 있습니다.
+Plaud는 Zapier에서 **트리거 전용 앱**으로 제공됩니다(Plaud → 다른 앱으로 데이터를 보내는 것만 가능).
+아래처럼 Zap 1개(트리거 1 + 액션 1)만 만들면 녹음 → 전사 완료 → 사내 표준 양식(RP) 자동 생성까지 끝입니다.
+
+1. **GitHub Personal Access Token 발급** (Zapier가 이 저장소에 이벤트를 보낼 때 사용, 1회만 설정)
+   - GitHub → Settings → Developer settings → Personal access tokens (classic) → `repo` 권한으로 생성
+   - ⚠️ 이 토큰은 GitHub Actions Secrets가 아니라 **Zapier 쪽에 붙여넣는** 값입니다 (완전히 다른 용도)
+2. **Zap 트리거**: 앱 `PLAUD` → 이벤트 `Transcript & Summary Ready` → Plaud 계정 연결
+3. **Zap 액션**: 앱 `Webhooks by Zapier` → 이벤트 `POST`
+   - URL: `https://api.github.com/repos/wnqls015-web/Honghyun-s-Workplace/dispatches`
+   - Headers: `Authorization: token <위에서 발급한 PAT>`, `Accept: application/vnd.github+json`
+   - Data (JSON, Payload Type = json):
+     ```json
+     {
+       "event_type": "new-rp-transcript",
+       "client_payload": {
+         "transcript": "{{Plaud 전사(Transcript) 필드를 여기에 매핑}}"
+       }
+     }
+     ```
+   - `transcript` 하나만 넘기면 충분합니다. 회의명은 Claude가 전사 내용에서 자동 추출하고, 날짜는 실행일로 자동 지정됩니다.
+   - 회의명/날짜를 직접 지정하고 싶으면 `client_payload`에 `title`, `date`를 추가로 매핑하세요.
+4. `rp.yml` 워크플로우가 전사를 받아 Claude로 구조화 → `template.xlsx` 양식 그대로 채워 Supabase에 저장합니다.
+5. `dashboard/rp`에서 결과를 바로 확인/다운로드할 수 있습니다.
+
+> 회의록을 Markdown 요약(`automation/meeting-minutes`)으로도 받고 싶다면, 같은 방식으로
+> Zap을 하나 더 만들고 `event_type`만 `"new-transcript"`로 바꾸면 `meeting-minutes.yml`이 실행됩니다.
 
 ## 보안 주의사항
 

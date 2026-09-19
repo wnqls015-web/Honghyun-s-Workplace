@@ -1,12 +1,18 @@
 name: RP (Report) Automation
 
-# n8n/Zapier가 Plaud 웹훅을 받으면 GitHub repository_dispatch API를 호출해
-# 이 워크플로우를 트리거합니다.
-# 호출 예시 (n8n HTTP Request 노드):
-#   POST https://api.github.com/repos/<owner>/<repo>/dispatches
-#   Headers: Authorization: token <GITHUB_TOKEN>
-#   Body: { "event_type": "new-rp-transcript",
-#           "client_payload": { "transcript_url": "...", "title": "...", "date": "..." } }
+# Zapier(Plaud "Transcript & Summary Ready" 트리거 → Webhooks by Zapier 액션)가
+# GitHub repository_dispatch API를 호출해 이 워크플로우를 트리거합니다.
+#
+# Zapier "Webhooks by Zapier" 액션 설정:
+#   Method: POST
+#   URL: https://api.github.com/repos/<owner>/<repo>/dispatches
+#   Headers: Authorization: token <GITHUB_TOKEN>, Accept: application/vnd.github+json
+#   Data (JSON):
+#     { "event_type": "new-rp-transcript",
+#       "client_payload": { "transcript": "<Plaud 전사 텍스트 필드>" } }
+#   title/date는 생략 가능 — Claude가 전사 내용에서 회의명을 추출하고,
+#   date는 워크플로우 실행일(오늘)로 자동 설정됩니다. 필요하면
+#   client_payload.title / client_payload.date로 덮어쓸 수 있습니다.
 
 on:
   repository_dispatch:
@@ -26,20 +32,29 @@ jobs:
       - name: 의존성 설치
         run: pip install -r automation/rp/requirements.txt
 
-      - name: 전사 파일 다운로드
+      - name: 전사 텍스트 준비
+        env:
+          TRANSCRIPT_TEXT: ${{ github.event.client_payload.transcript }}
+          TRANSCRIPT_URL: ${{ github.event.client_payload.transcript_url }}
         run: |
-          curl -sL "${{ github.event.client_payload.transcript_url }}" -o transcript.txt
+          if [ -n "$TRANSCRIPT_TEXT" ]; then
+            printf '%s' "$TRANSCRIPT_TEXT" > transcript.txt
+          else
+            curl -sL "$TRANSCRIPT_URL" -o transcript.txt
+          fi
 
       - name: 회의록(RP) 생성 및 Supabase 저장
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RP_TITLE: ${{ github.event.client_payload.title }}
+          RP_DATE: ${{ github.event.client_payload.date }}
         run: |
-          python automation/rp/generate_rp.py \
-            --input transcript.txt \
-            --title "${{ github.event.client_payload.title }}" \
-            --date "${{ github.event.client_payload.date }}"
+          args=(--input transcript.txt)
+          [ -n "$RP_TITLE" ] && args+=(--title "$RP_TITLE")
+          [ -n "$RP_DATE" ] && args+=(--date "$RP_DATE")
+          python automation/rp/generate_rp.py "${args[@]}"
 
       - name: 생성된 RP 파일 아티팩트 업로드
         uses: actions/upload-artifact@v4
