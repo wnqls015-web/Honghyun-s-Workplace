@@ -7,9 +7,11 @@ export default function Nav() {
   return (
     <nav className="nav">
       <div className="nav-inner">
-        <span className="nav-brand">Workplace</span>
+        <Link href="/" className="nav-brand">
+          HongHyun&apos;s Work Space
+        </Link>
         <div className="nav-links">
-          <Link href="/" className={pathname === "/" ? "active" : ""}>
+          <Link href="/minutes" className={pathname === "/minutes" ? "active" : ""}>
             회의록
           </Link>
           <Link href="/rp" className={pathname === "/rp" ? "active" : ""}>
