@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Nav from "../components/Nav";
 import { supabase } from "../lib/supabase";
 
 export default function Home() {
@@ -20,38 +20,48 @@ export default function Home() {
   }, []);
 
   return (
-    <main style={{ maxWidth: 800, margin: "0 auto", padding: 24 }}>
-      <h1>업무 자동화 대시보드</h1>
-      <p>자동으로 생성된 회의록 및 업무 자료 모음</p>
-      <p>
-        <Link href="/rp">→ RP(사내 표준 양식 회의록) 보러가기</Link>
-      </p>
+    <>
+      <Nav />
 
-      {loading && <p>불러오는 중...</p>}
+      <header className="hero">
+        <p className="hero-eyebrow">Workplace</p>
+        <h1 className="hero-title">업무 자동화 대시보드</h1>
+        <p className="hero-subtitle">
+          자동으로 생성된 회의록과 업무 자료를 한곳에서 확인하세요.
+        </p>
+        <div className="hero-actions">
+          <a href="/rp" className="btn btn-primary">
+            RP 회의록 보기
+          </a>
+        </div>
+      </header>
 
-      {!loading &&
-        minutes.map((m) => (
-          <div
-            key={m.id}
-            style={{
-              border: "1px solid #eee",
-              borderRadius: 8,
-              padding: 16,
-              marginBottom: 12,
-            }}
-          >
-            <h3>{m.title}</h3>
-            <p style={{ color: "#666", fontSize: 14 }}>
-              {m.meeting_date} · {m.attendees}
-            </p>
-            <details>
-              <summary>내용 보기</summary>
-              <pre style={{ whiteSpace: "pre-wrap" }}>{m.summary}</pre>
-            </details>
+      <main className="section">
+        {loading && <p className="state-text">불러오는 중...</p>}
+
+        {!loading && (
+          <div className="card-list">
+            {minutes.map((m) => (
+              <article key={m.id} className="card">
+                <div className="card-top">
+                  <h3 className="card-title">{m.title}</h3>
+                </div>
+                <p className="card-meta">
+                  {m.meeting_date} · {m.attendees}
+                </p>
+                <details className="disclosure">
+                  <summary>내용 보기</summary>
+                  <p className="card-summary">{m.summary}</p>
+                </details>
+              </article>
+            ))}
           </div>
-        ))}
+        )}
 
-      {!loading && minutes.length === 0 && <p>아직 저장된 회의록이 없습니다.</p>}
-    </main>
+        {!loading && minutes.length === 0 && (
+          <p className="state-text">아직 저장된 회의록이 없습니다.</p>
+        )}
+      </main>
+    </>
   );
 }
