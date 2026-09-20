@@ -77,6 +77,19 @@ def call_claude_for_structure(transcript: str) -> dict:
     return json.loads(raw)
 
 
+def build_raw_data(transcript: str, meeting_date: str) -> dict:
+    """ANTHROPIC_API_KEY가 없을 때: AI 정리 없이 전사록 원문을 그대로 담는다."""
+    return {
+        "meeting_name": f"{meeting_date} 회의",
+        "datetime": meeting_date,
+        "location": "",
+        "author": "",
+        "attendees": "",
+        "agenda_items": [{"agenda": "전사록 원문", "discussion": transcript}],
+        "instructions": [],
+    }
+
+
 def capture_block_style(ws, rows, cols):
     styles = {}
     for i, r in enumerate(rows):
@@ -271,7 +284,12 @@ def main():
     with open(args.input, "r", encoding="utf-8") as f:
         transcript = f.read()
 
-    data = call_claude_for_structure(transcript)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        data = call_claude_for_structure(transcript)
+    else:
+        print("⚠️ ANTHROPIC_API_KEY가 없어 AI 정리 없이 전사록 원문을 그대로 저장합니다.")
+        data = build_raw_data(transcript, args.date)
+
     if args.title:
         data["meeting_name"] = args.title
 
