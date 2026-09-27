@@ -238,8 +238,8 @@ def send_email_notification(file_path: str, meeting_name: str, to_email: str):
 
 
 def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> str:
-    supabase_url = os.environ["SUPABASE_URL"]
-    supabase = create_client(supabase_url, os.environ["SUPABASE_SERVICE_KEY"])
+    supabase_url = os.environ["SUPABASE_URL"].strip().rstrip("/")
+    supabase = create_client(supabase_url, os.environ["SUPABASE_SERVICE_KEY"].strip())
 
     try:
         bucket_names = [b.name for b in supabase.storage.list_buckets()]
@@ -271,7 +271,9 @@ def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> 
 
 
 def save_to_supabase(data: dict, meeting_date: str, file_url: str):
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    supabase = create_client(
+        os.environ["SUPABASE_URL"].strip().rstrip("/"), os.environ["SUPABASE_SERVICE_KEY"].strip()
+    )
     supabase.table("rp_reports").insert(
         {
             "meeting_name": data.get("meeting_name", ""),
