@@ -59,11 +59,17 @@
 | location | text | 장소 |
 | author | text | 작성자 |
 | attendees | text | 참석자 |
+| category | text | 회의 목적 분류 (`주간업무보고`/`프로젝트`/`고객미팅`/`교육·워크숍`/`기타`, Claude가 자동 분류) |
 | agenda_items | jsonb | 회의 내용 (안건/논의내용 배열) |
 | instructions | jsonb | 지시사항 (지시사항/담당자/비고 배열) |
 | file_url | text | Supabase Storage(`rp-reports` 버킷)에 저장된 .xlsx 공개 URL |
 | created_at | timestamptz (default: now()) | 생성 시각 |
 | source | text | 어떤 자동화에서 왔는지 구분용 (`rp-automation`) |
+
+> 기존에 `rp_reports` 테이블을 이미 만드셨다면, `category` 컬럼만 추가로 실행하세요:
+> ```sql
+> alter table rp_reports add column if not exists category text;
+> ```
 
 > RLS(Row Level Security)를 반드시 켜고 조회 정책을 설정하세요. `rp-reports` Storage 버킷도
 > 필요한 사용자만 다운로드 가능하도록 정책을 설정하세요.
