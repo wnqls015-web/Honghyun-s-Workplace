@@ -1,19 +1,27 @@
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function Home() {
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    function onScroll() {
+      setRevealed(window.scrollY > 24);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <>
+    <div className="landing-stage">
       <header className="hero hero-landing">
         <h1 className="hero-title">
           HongHyun&apos;s
           <br />
           Work Space
         </h1>
-        <div className="scroll-hint">⌄</div>
-      </header>
 
-      <section className="landing-menu">
-        <div className="landing-menu-inner">
+        <div className={`landing-inline-menu${revealed ? " revealed" : ""}`}>
           <Link href="/minutes" className="landing-menu-link">
             <span className="landing-menu-title">회의록</span>
             <span className="landing-menu-desc">
@@ -21,7 +29,9 @@ export default function Home() {
             </span>
           </Link>
         </div>
-      </section>
-    </>
+
+        <div className={`scroll-hint${revealed ? " scroll-hint-hidden" : ""}`}>⌄</div>
+      </header>
+    </div>
   );
 }
