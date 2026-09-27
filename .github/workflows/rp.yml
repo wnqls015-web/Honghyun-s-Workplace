@@ -21,7 +21,12 @@ name: RP (Report) Automation
 on:
   repository_dispatch:
     types: [new-rp-transcript]
-  workflow_dispatch: {}   # 수동 실행 테스트용
+  workflow_dispatch:       # 수동 실행 테스트용 (Plaud/Zapier 없이 바로 테스트 가능)
+    inputs:
+      transcript:
+        description: "테스트용 전사 텍스트 (비워두면 샘플 텍스트 사용)"
+        required: false
+        type: string
 
 jobs:
   generate-rp:
@@ -38,13 +43,15 @@ jobs:
 
       - name: 전사 텍스트 준비
         env:
-          TRANSCRIPT_TEXT: ${{ github.event.client_payload.transcript }}
+          TRANSCRIPT_TEXT: ${{ github.event.client_payload.transcript || github.event.inputs.transcript }}
           TRANSCRIPT_URL: ${{ github.event.client_payload.transcript_url }}
         run: |
           if [ -n "$TRANSCRIPT_TEXT" ]; then
             printf '%s' "$TRANSCRIPT_TEXT" > transcript.txt
-          else
+          elif [ -n "$TRANSCRIPT_URL" ]; then
             curl -sL "$TRANSCRIPT_URL" -o transcript.txt
+          else
+            printf '%s' "이것은 수동 실행 테스트용 샘플 전사록입니다. 오늘 회의 안건은 A이고, 다음 주까지 B를 완료하기로 했습니다." > transcript.txt
           fi
 
       - name: 회의록(RP) 생성 + 이메일 발송 + Supabase 저장
