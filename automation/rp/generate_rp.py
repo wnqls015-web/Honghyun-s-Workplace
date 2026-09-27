@@ -238,7 +238,22 @@ def send_email_notification(file_path: str, meeting_name: str, to_email: str):
 
 
 def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> str:
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    supabase_url = os.environ["SUPABASE_URL"]
+    supabase = create_client(supabase_url, os.environ["SUPABASE_SERVICE_KEY"])
+
+    try:
+        bucket_names = [b.name for b in supabase.storage.list_buckets()]
+    except Exception as e:
+        raise RuntimeError(
+            f"Supabase 프로젝트({supabase_url})에 연결할 수 없습니다 (URL/키 확인 필요): {e}"
+        ) from e
+
+    if STORAGE_BUCKET not in bucket_names:
+        raise RuntimeError(
+            f"'{STORAGE_BUCKET}' 버킷을 찾을 수 없습니다. "
+            f"SUPABASE_URL({supabase_url})이 가리키는 프로젝트의 실제 버킷 목록: {bucket_names}. "
+            "Storage 버킷 이름/프로젝트가 GitHub Secrets와 일치하는지 확인하세요."
+        )
 
     storage_path = f"{meeting_date}_{safe_filename(meeting_name)}.xlsx"
 
