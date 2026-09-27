@@ -1,10 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Nav from "../components/Nav";
 import { supabase } from "../lib/supabase";
+
+const CATEGORIES = ["전체", "주간업무보고", "프로젝트", "고객미팅", "교육/워크숍", "기타"];
+
+function isRawTranscript(r) {
+  const items = r.agenda_items || [];
+  return items.length === 1 && items[0]?.agenda === "전사록 원문";
+}
 
 export default function Minutes() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("전체");
 
   useEffect(() => {
     async function fetchReports() {
@@ -19,6 +28,20 @@ export default function Minutes() {
     fetchReports();
   }, []);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return reports.filter((r) => {
+      const matchesCategory = category === "전체" || (r.category || "기타") === category;
+      if (!matchesCategory) return false;
+      if (!q) return true;
+      const haystack = [r.meeting_name, r.meeting_date, r.meeting_datetime]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [reports, search, category]);
+
   return (
     <>
       <Nav />
@@ -32,83 +55,122 @@ export default function Minutes() {
       </header>
 
       <main className="section">
+        {!loading && reports.length > 0 && (
+          <div className="filters">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="회의명 또는 날짜로 검색"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <div className="filter-tabs">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`filter-tab${category === c ? " active" : ""}`}
+                  onClick={() => setCategory(c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading && <p className="state-text">불러오는 중...</p>}
 
         {!loading && (
           <div className="card-list">
-            {reports.map((r) => (
-              <article key={r.id} className="card">
-                <div className="card-top">
-                  <h3 className="card-title">{r.meeting_name}</h3>
-                  {r.file_url && (
-                    <a
-                      href={r.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-link"
-                    >
-                      .xlsx 다운로드
-                    </a>
-                  )}
-                </div>
-                <p className="card-meta">
-                  {r.meeting_datetime} · {r.location} · 작성자 {r.author}
-                  <br />
-                  참석자 {r.attendees}
-                </p>
-
-                <details className="disclosure">
-                  <summary>회의 내용 / 지시사항 보기</summary>
-
-                  <p className="table-label">회의 내용</p>
-                  <div className="table-wrap">
-                    <table className="rp-table">
-                      <thead>
-                        <tr>
-                          <th>순번</th>
-                          <th>안건</th>
-                          <th>논의 내용</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(r.agenda_items || []).map((item, i) => (
-                          <tr key={i}>
-                            <td>{i + 1}</td>
-                            <td>{item.agenda}</td>
-                            <td style={{ whiteSpace: "pre-wrap" }}>{item.discussion}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {filtered.map((r) => {
+              const raw = isRawTranscript(r);
+              return (
+                <article key={r.id} className="card">
+                  <div className="card-top">
+                    <h3 className="card-title">{r.meeting_name}</h3>
+                    {r.file_url && (
+                      <a
+                        href={r.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-link"
+                      >
+                        .xlsx 다운로드
+                      </a>
+                    )}
                   </div>
 
-                  <p className="table-label">지시사항</p>
-                  <div className="table-wrap">
-                    <table className="rp-table">
-                      <thead>
-                        <tr>
-                          <th>순번</th>
-                          <th>지시사항</th>
-                          <th>담당자</th>
-                          <th>비고</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(r.instructions || []).map((item, i) => (
-                          <tr key={i}>
-                            <td>{i + 1}</td>
-                            <td>{item.instruction}</td>
-                            <td>{item.owner}</td>
-                            <td>{item.note}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="card-badges" style={{ marginTop: 8 }}>
+                    <span className={`badge ${raw ? "badge-raw" : "badge-ai"}`}>
+                      {raw ? "원문" : "AI 요약"}
+                    </span>
+                    {r.category && <span className="badge badge-category">{r.category}</span>}
                   </div>
-                </details>
-              </article>
-            ))}
+
+                  <p className="card-meta">
+                    {r.meeting_datetime} · {r.location} · 작성자 {r.author}
+                    <br />
+                    참석자 {r.attendees}
+                  </p>
+
+                  <details className="disclosure">
+                    <summary>회의 내용 / 지시사항 보기</summary>
+
+                    <p className="table-label">회의 내용</p>
+                    <div className="table-wrap">
+                      <table className="rp-table">
+                        <thead>
+                          <tr>
+                            <th>순번</th>
+                            <th>안건</th>
+                            <th>논의 내용</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(r.agenda_items || []).map((item, i) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td>{item.agenda}</td>
+                              <td style={{ whiteSpace: "pre-wrap" }}>{item.discussion}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <p className="table-label">지시사항</p>
+                    <div className="table-wrap">
+                      <table className="rp-table">
+                        <thead>
+                          <tr>
+                            <th>순번</th>
+                            <th>지시사항</th>
+                            <th>담당자</th>
+                            <th>비고</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(r.instructions || []).map((item, i) => (
+                            <tr key={i}>
+                              <td>{i + 1}</td>
+                              <td>{item.instruction}</td>
+                              <td>{item.owner}</td>
+                              <td>{item.note}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </article>
+              );
+            })}
           </div>
+        )}
+
+        {!loading && reports.length > 0 && filtered.length === 0 && (
+          <p className="state-text">검색/필터 조건에 맞는 회의록이 없습니다.</p>
         )}
 
         {!loading && reports.length === 0 && (

@@ -30,6 +30,9 @@ TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "template.xlsx")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 STORAGE_BUCKET = "rp-reports"
 
+# 회의 목적 분류 (대시보드에서 카테고리별로 구분/필터링하는 데 사용)
+MEETING_CATEGORIES = ["주간업무보고", "프로젝트", "고객미팅", "교육/워크숍", "기타"]
+
 # 템플릿의 고정 좌표 (automation/rp/template.xlsx 기준)
 # 1~10행(제목/회의개요/표 헤더)은 항상 고정이며, 11행부터를 항목 수에 맞춰 새로 그린다.
 REBUILD_FROM_ROW = 11
@@ -71,6 +74,7 @@ def call_claude_for_structure(transcript: str) -> dict:
             '  "location": "장소",\n'
             '  "author": "작성자",\n'
             '  "attendees": "참석자 (명단/역할)",\n'
+            f'  "category": "다음 중 가장 알맞은 하나: {", ".join(MEETING_CATEGORIES)}",\n'
             '  "agenda_items": [{"agenda": "안건", "discussion": "논의 내용 (핵심만 불릿 형태로)"}],\n'
             '  "instructions": [{"instruction": "지시사항", "owner": "담당자", "note": "비고(기한 등)"}]\n'
             "}"
@@ -84,7 +88,10 @@ def call_claude_for_structure(transcript: str) -> dict:
     )
     raw = message.content[0].text.strip()
     raw = re.sub(r"^```(json)?|```$", "", raw, flags=re.MULTILINE).strip()
-    return json.loads(raw)
+    data = json.loads(raw)
+    if data.get("category") not in MEETING_CATEGORIES:
+        data["category"] = "기타"
+    return data
 
 
 def build_raw_data(transcript: str, meeting_date: str) -> dict:
@@ -95,6 +102,7 @@ def build_raw_data(transcript: str, meeting_date: str) -> dict:
         "location": "",
         "author": "",
         "attendees": "",
+        "category": "기타",
         "agenda_items": [{"agenda": "전사록 원문", "discussion": transcript}],
         "instructions": [],
     }
@@ -302,6 +310,7 @@ def save_to_supabase(data: dict, meeting_date: str, file_url: str):
             "location": data.get("location", ""),
             "author": data.get("author", ""),
             "attendees": data.get("attendees", ""),
+            "category": data.get("category", "기타"),
             "agenda_items": data.get("agenda_items", []),
             "instructions": data.get("instructions", []),
             "file_url": file_url,
