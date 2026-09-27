@@ -237,8 +237,18 @@ def send_email_notification(file_path: str, meeting_name: str, to_email: str):
         server.send_message(msg)
 
 
+def clean_supabase_url(url: str) -> str:
+    """SUPABASE_URL에 /rest/v1, /storage/v1 등 API 하위 경로가 실수로
+    포함된 경우 제거해서 create_client()가 기대하는 프로젝트 base URL로 만든다."""
+    url = url.strip().rstrip("/")
+    for suffix in ("/rest/v1", "/storage/v1", "/auth/v1", "/functions/v1"):
+        if url.endswith(suffix):
+            url = url[: -len(suffix)]
+    return url
+
+
 def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> str:
-    supabase_url = os.environ["SUPABASE_URL"].strip().rstrip("/")
+    supabase_url = clean_supabase_url(os.environ["SUPABASE_URL"])
     supabase = create_client(supabase_url, os.environ["SUPABASE_SERVICE_KEY"].strip())
 
     try:
@@ -272,7 +282,7 @@ def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> 
 
 def save_to_supabase(data: dict, meeting_date: str, file_url: str):
     supabase = create_client(
-        os.environ["SUPABASE_URL"].strip().rstrip("/"), os.environ["SUPABASE_SERVICE_KEY"].strip()
+        clean_supabase_url(os.environ["SUPABASE_URL"]), os.environ["SUPABASE_SERVICE_KEY"].strip()
     )
     supabase.table("rp_reports").insert(
         {
