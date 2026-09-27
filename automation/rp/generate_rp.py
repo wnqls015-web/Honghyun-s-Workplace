@@ -314,8 +314,11 @@ def main():
 
     to_email = os.environ.get("RP_EMAIL_TO")
     if to_email and os.environ.get("SMTP_USER") and os.environ.get("SMTP_PASSWORD"):
-        send_email_notification(output_path, data.get("meeting_name", "RP"), to_email)
-        print(f"✅ 이메일 발송 완료: {to_email}")
+        try:
+            send_email_notification(output_path, data.get("meeting_name", "RP"), to_email)
+            print(f"✅ 이메일 발송 완료: {to_email}")
+        except Exception as e:
+            print(f"⚠️ 이메일 발송 실패 (건너뜀): {e}")
 
     if not args.no_upload and os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"):
         try:
