@@ -59,7 +59,7 @@
 | location | text | 장소 |
 | author | text | 작성자 |
 | attendees | text | 참석자 |
-| category | text | 회의 목적 분류 (`주간업무보고`/`프로젝트`/`고객미팅`/`교육·워크숍`/`기타`, Claude가 자동 분류) |
+| category | text | 회의 목적 분류 (`주간업무보고`/`경영회의`/`기타`, Claude가 자동 분류) |
 | agenda_items | jsonb | 회의 내용 (안건/논의내용 배열) |
 | instructions | jsonb | 지시사항 (지시사항/담당자/비고 배열) |
 | file_url | text | Supabase Storage(`rp-reports` 버킷)에 저장된 .xlsx 공개 URL |
