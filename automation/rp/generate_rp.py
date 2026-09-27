@@ -15,6 +15,7 @@ Supabase Storage에 업로드 + rp_reports 테이블에 메타데이터를 저�
 import os
 import re
 import json
+import hashlib
 import argparse
 import smtplib
 from copy import copy
@@ -43,6 +44,15 @@ INSTR_ROW_HEIGHT = 30
 
 def safe_filename(name: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣_-]+", "_", name) or "RP"
+
+
+def storage_safe_key(name: str) -> str:
+    """Supabase Storage 객체 키는 한글 등 비-ASCII 문자를 허용하지 않아
+    로컬 파일명(safe_filename)과 별도로 ASCII 전용 키를 만든다."""
+    ascii_part = re.sub(r"[^0-9A-Za-z_-]+", "", name)
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+    key = f"{ascii_part}-{digest}" if ascii_part else digest
+    return key[:80]
 
 
 def call_claude_for_structure(transcript: str) -> dict:
@@ -265,7 +275,7 @@ def upload_to_supabase(file_path: str, meeting_name: str, meeting_date: str) -> 
             "Storage 버킷 이름/프로젝트가 GitHub Secrets와 일치하는지 확인하세요."
         )
 
-    storage_path = f"{meeting_date}_{safe_filename(meeting_name)}.xlsx"
+    storage_path = f"{meeting_date}_{storage_safe_key(meeting_name)}.xlsx"
 
     with open(file_path, "rb") as f:
         supabase.storage.from_(STORAGE_BUCKET).upload(
