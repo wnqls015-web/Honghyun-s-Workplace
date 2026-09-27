@@ -303,9 +303,12 @@ def main():
         print(f"✅ 이메일 발송 완료: {to_email}")
 
     if not args.no_upload and os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"):
-        file_url = upload_to_supabase(output_path, data.get("meeting_name", "회의록"), args.date)
-        save_to_supabase(data, args.date, file_url)
-        print(f"✅ Supabase 업로드 완료: {file_url}")
+        try:
+            file_url = upload_to_supabase(output_path, data.get("meeting_name", "회의록"), args.date)
+            save_to_supabase(data, args.date, file_url)
+            print(f"✅ Supabase 업로드 완료: {file_url}")
+        except Exception as e:
+            print(f"⚠️ Supabase 업로드 실패 (건너뜀): {e}")
     elif not args.no_upload:
         print("⚠️ SUPABASE_URL / SUPABASE_SERVICE_KEY가 설정되지 않아 Supabase 업로드를 건너뜁니다.")
 
