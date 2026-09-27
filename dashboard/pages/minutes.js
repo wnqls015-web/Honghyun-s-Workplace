@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import Nav from "../components/Nav";
 import { supabase } from "../lib/supabase";
 
-const CATEGORIES = ["전체", "주간업무보고", "프로젝트", "고객미팅", "교육/워크숍", "기타"];
+const CATEGORIES = ["전체", "주간업무보고", "경영회의", "기타"];
 
 function isRawTranscript(r) {
   const items = r.agenda_items || [];

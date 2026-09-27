@@ -31,7 +31,7 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 STORAGE_BUCKET = "rp-reports"
 
 # 회의 목적 분류 (대시보드에서 카테고리별로 구분/필터링하는 데 사용)
-MEETING_CATEGORIES = ["주간업무보고", "프로젝트", "고객미팅", "교육/워크숍", "기타"]
+MEETING_CATEGORIES = ["주간업무보고", "경영회의", "기타"]
 
 # 템플릿의 고정 좌표 (automation/rp/template.xlsx 기준)
 # 1~10행(제목/회의개요/표 헤더)은 항상 고정이며, 11행부터를 항목 수에 맞춰 새로 그린다.
