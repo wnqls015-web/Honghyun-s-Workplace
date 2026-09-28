@@ -100,6 +100,27 @@ h1, h2, h3, h4, p {
   font-weight: 600;
 }
 
+.nav-logout {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
+  opacity: 0.8;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s ease;
+}
+
+.nav-logout:hover {
+  opacity: 1;
+}
+
+.nav-dark .nav-logout {
+  color: #f5f5f7;
+}
+
 /* ---------- Hero ---------- */
 
 .hero {
@@ -442,6 +463,65 @@ h1, h2, h3, h4, p {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+/* ---------- Login ---------- */
+
+.login-form {
+  max-width: 360px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.login-input {
+  font-size: 15px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s ease;
+  font-family: inherit;
+}
+
+.login-input:focus {
+  border-color: var(--accent);
+}
+
+.login-error {
+  font-size: 13px;
+  color: #ff3b30;
+}
+
+.login-submit {
+  justify-content: center;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-hint {
+  max-width: 360px;
+  margin: 20px auto 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 /* ---------- Disclosure ---------- */
