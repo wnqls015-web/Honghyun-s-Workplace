@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Nav from "../components/Nav";
 import { supabase } from "../lib/supabase";
+import { useAuthGuard } from "../lib/useAuthGuard";
 
 const CATEGORIES = ["전체", "주간업무보고", "경영회의", "기타"];
 
@@ -10,12 +11,15 @@ function isRawTranscript(r) {
 }
 
 export default function Minutes() {
+  const session = useAuthGuard();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("전체");
 
   useEffect(() => {
+    if (!session) return;
+
     async function fetchReports() {
       const { data, error } = await supabase
         .from("rp_reports")
@@ -26,7 +30,16 @@ export default function Minutes() {
       setLoading(false);
     }
     fetchReports();
-  }, []);
+  }, [session]);
+
+  if (!session) {
+    return (
+      <>
+        <Nav />
+        <p className="state-text">로그인 확인 중...</p>
+      </>
+    );
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

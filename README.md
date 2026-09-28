@@ -46,6 +46,34 @@
    - Vercel에 `dashboard/` 폴더를 GitHub 연동으로 배포
    - 환경변수(`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)를 Vercel 프로젝트 설정에 등록
 
+## 로그인 (회의록 페이지 접근 제어)
+
+`/minutes` 페이지는 로그인해야 볼 수 있습니다 (Supabase Auth, 이메일+비밀번호 방식). 공개 회원가입
+화면은 없고, 계정은 관리자가 Supabase에서 직접 만들어 회사 사람들에게 전달하는 방식입니다.
+
+**계정 만드는 방법**
+
+1. Supabase 대시보드 → **Authentication → Users → Add user**
+2. 이메일/비밀번호 입력 후 **Auto Confirm User** 체크 (이메일 인증 절차 없이 바로 로그인 가능해짐)
+3. 만든 이메일/비밀번호를 회사 사람에게 전달 → `/login`에서 로그인
+
+**`rp_reports` 테이블 읽기 권한 (RLS)**
+
+로그인한 사용자만 회의록을 읽을 수 있도록, 아래 SQL을 SQL Editor에서 실행하세요
+(비로그인 상태에서 공개 조회를 허용하는 정책을 이전에 만드셨다면 먼저 지웁니다):
+
+```sql
+drop policy if exists "Allow public read access" on rp_reports;
+
+create policy "Allow authenticated read access"
+on rp_reports
+for select
+using (auth.role() = 'authenticated');
+```
+
+> 저장(insert)은 GitHub Actions가 `service_role` 키로 수행하므로 RLS와 무관하게 항상 동작합니다.
+> 이 정책은 대시보드에서의 "조회"에만 적용됩니다.
+
 ## Supabase 테이블 스키마 (rp_reports)
 
 회의록 자동화(`automation/rp`)가 사내 표준 회의록 양식(`template.xlsx`)을 채워 저장하는 테이블입니다.
