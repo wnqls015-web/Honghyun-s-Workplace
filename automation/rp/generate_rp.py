@@ -94,16 +94,32 @@ def call_claude_for_structure(transcript: str) -> dict:
     return data
 
 
-def build_raw_data(transcript: str, meeting_date: str) -> dict:
-    """ANTHROPIC_API_KEY가 없을 때: AI 정리 없이 전사록 원문을 그대로 담는다."""
+def guess_category(title: str) -> str:
+    """제목에 포함된 키워드로 간단히 분류 (AI 호출 없이)."""
+    if not title:
+        return "기타"
+    if "경영" in title:
+        return "경영회의"
+    if "주간" in title or "업무보고" in title:
+        return "주간업무보고"
+    return "기타"
+
+
+def build_raw_data(transcript: str, meeting_date: str, title: str = "", attendees: str = "", summary: str = "") -> dict:
+    """ANTHROPIC_API_KEY가 없을 때: AI 정리 없이 전사록(+ PLAUD가 넘겨준 제목/참석자/요약이 있으면 그것도) 담는다."""
+    agenda_items = []
+    if summary:
+        agenda_items.append({"agenda": "회의 요약 (PLAUD)", "discussion": summary})
+    agenda_items.append({"agenda": "전사록 원문", "discussion": transcript})
+
     return {
-        "meeting_name": f"{meeting_date} 회의",
+        "meeting_name": title or f"{meeting_date} 회의",
         "datetime": meeting_date,
         "location": "",
         "author": "",
-        "attendees": "",
-        "category": "기타",
-        "agenda_items": [{"agenda": "전사록 원문", "discussion": transcript}],
+        "attendees": attendees,
+        "category": guess_category(title),
+        "agenda_items": agenda_items,
         "instructions": [],
     }
 
@@ -324,6 +340,8 @@ def main():
     parser.add_argument("--input", required=True, help="전사 텍스트 파일 경로")
     parser.add_argument("--title", default="", help="회의명 (미입력 시 Claude 추출값 사용)")
     parser.add_argument("--date", default=str(date.today()))
+    parser.add_argument("--attendees", default="", help="참석자 (PLAUD 등 외부에서 넘겨준 값, 있으면 우선 사용)")
+    parser.add_argument("--summary", default="", help="PLAUD가 생성한 회의 요약 (ANTHROPIC_API_KEY 없을 때만 사용)")
     parser.add_argument("--no-upload", action="store_true", help="Supabase 업로드 생략, 로컬 파일만 생성")
     args = parser.parse_args()
 
@@ -334,10 +352,12 @@ def main():
         data = call_claude_for_structure(transcript)
     else:
         print("⚠️ ANTHROPIC_API_KEY가 없어 AI 정리 없이 전사록 원문을 그대로 저장합니다.")
-        data = build_raw_data(transcript, args.date)
+        data = build_raw_data(transcript, args.date, title=args.title, attendees=args.attendees, summary=args.summary)
 
     if args.title:
         data["meeting_name"] = args.title
+    if args.attendees:
+        data["attendees"] = args.attendees
 
     output_path = os.path.join(OUTPUT_DIR, f"{args.date}_{safe_filename(data.get('meeting_name', 'RP'))}.xlsx")
     fill_template(data, output_path)

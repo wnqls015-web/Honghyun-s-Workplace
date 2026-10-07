@@ -9,10 +9,19 @@ name: RP (Report) Automation
 #   Headers: Authorization: token <GITHUB_TOKEN>, Accept: application/vnd.github+json
 #   Data (JSON):
 #     { "event_type": "new-rp-transcript",
-#       "client_payload": { "transcript": "<Plaud 전사 텍스트 필드>" } }
-#   title/date는 생략 가능 — Claude가 전사 내용에서 회의명을 추출하고,
-#   date는 워크플로우 실행일(오늘)로 자동 설정됩니다. 필요하면
-#   client_payload.title / client_payload.date로 덮어쓸 수 있습니다.
+#       "client_payload": {
+#         "transcript": "<Plaud 전사 텍스트 필드>",
+#         "title": "<Plaud 제목 필드>",
+#         "attendees": "<Plaud 참석자/화자 필드>",
+#         "summary": "<Plaud 요약 필드>"
+#       } }
+#   transcript만 필수고 나머지는 전부 생략 가능합니다.
+#   - title 없으면: Claude가 전사 내용에서 추출(AI 켜진 경우) 또는 "날짜 회의"로 표시
+#   - attendees 없으면: 빈 값으로 저장
+#   - summary는 ANTHROPIC_API_KEY가 없을 때(AI 미사용)만 사용됨 — PLAUD가 이미 만들어준
+#     요약을 그대로 회의 내용에 담아, 전사록 원문만 덩그러니 저장되는 것보다 더 읽기 좋게 함.
+#     AI를 쓰는 경우엔 Claude가 전사록 전체를 보고 직접 더 상세하게 구조화하므로 summary는 무시됨.
+#   date는 생략하면 워크플로우 실행일(오늘)로 자동 설정됩니다.
 #
 # 생성된 RP를 이메일로도 받고 싶다면 repo Secrets에 SMTP_USER(보내는 Gmail
 # 주소), SMTP_PASSWORD(Gmail 앱 비밀번호), RP_EMAIL_TO(받는 주소)를 등록하세요.
@@ -64,10 +73,14 @@ jobs:
           RP_EMAIL_TO: ${{ secrets.RP_EMAIL_TO }}
           RP_TITLE: ${{ github.event.client_payload.title }}
           RP_DATE: ${{ github.event.client_payload.date }}
+          RP_ATTENDEES: ${{ github.event.client_payload.attendees }}
+          RP_SUMMARY: ${{ github.event.client_payload.summary }}
         run: |
           args=(--input transcript.txt)
           [ -n "$RP_TITLE" ] && args+=(--title "$RP_TITLE")
           [ -n "$RP_DATE" ] && args+=(--date "$RP_DATE")
+          [ -n "$RP_ATTENDEES" ] && args+=(--attendees "$RP_ATTENDEES")
+          [ -n "$RP_SUMMARY" ] && args+=(--summary "$RP_SUMMARY")
           python automation/rp/generate_rp.py "${args[@]}"
 
       - name: 생성된 RP 파일 아티팩트 업로드

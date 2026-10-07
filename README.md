@@ -114,21 +114,38 @@ Plaud는 Zapier에서 **트리거 전용 앱**으로 제공됩니다(Plaud → �
    - GitHub → Settings → Developer settings → Personal access tokens (classic) → `repo` 권한으로 생성
    - ⚠️ 이 토큰은 GitHub Actions Secrets가 아니라 **Zapier 쪽에 붙여넣는** 값입니다 (완전히 다른 용도)
 2. **Zap 트리거**: 앱 `PLAUD` → 이벤트 `Transcript & Summary Ready` → Plaud 계정 연결
-3. **Zap 액션**: 앱 `Webhooks by Zapier` → 이벤트 `POST`
-   - URL: `https://api.github.com/repos/wnqls015-web/Honghyun-s-Workplace/dispatches`
-   - Headers: `Authorization: token <위에서 발급한 PAT>`, `Accept: application/vnd.github+json`
-   - Data (JSON, Payload Type = json):
-     ```json
-     {
-       "event_type": "new-rp-transcript",
-       "client_payload": {
-         "transcript": "{{Plaud 전사(Transcript) 필드를 여기에 매핑}}"
+3. **Zap 액션**: 앱 `Code by Zapier` → 이벤트 `Run Javascript`
+   - (`Webhooks by Zapier`의 Data 필드는 중첩 JSON을 제대로 못 만들어서 `Code by Zapier`로 직접 `fetch()`
+     호출하는 방식을 씁니다. Input Data에 PLAUD 트리거의 필드들을 매핑해두고, Code에서 아래처럼 사용)
+     ```javascript
+     const res = await fetch(
+       "https://api.github.com/repos/wnqls015-web/Honghyun-s-Workplace/dispatches",
+       {
+         method: "POST",
+         headers: {
+           Authorization: "token <위에서 발급한 PAT>",
+           Accept: "application/vnd.github+json",
+         },
+         body: JSON.stringify({
+           event_type: "new-rp-transcript",
+           client_payload: {
+             transcript: inputData.transcript,
+             title: inputData.title,       // 선택: PLAUD 제목 필드
+             attendees: inputData.attendees, // 선택: PLAUD 참석자/화자 필드
+             summary: inputData.summary,     // 선택: PLAUD 요약 필드
+           },
+         }),
        }
-     }
+     );
+     output = { status: res.status };
      ```
-   - `transcript` 하나만 넘기면 충분합니다. 회의명은 Claude가 전사 내용에서 자동 추출하고, 날짜는 실행일로 자동 지정됩니다.
-   - 회의명/날짜를 직접 지정하고 싶으면 `client_payload`에 `title`, `date`를 추가로 매핑하세요.
-4. `rp.yml` 워크플로우가 전사를 받아 Claude로 구조화 → `template.xlsx` 양식 그대로 채워 Supabase에 저장합니다.
+   - `transcript`만 필수입니다. 나머지(`title`/`attendees`/`summary`)는 PLAUD 트리거 단계에서
+     해당 필드가 있으면 Input Data에 매핑해서 같이 보내세요 — 없으면 그냥 생략해도 됩니다.
+   - `title`을 안 보내면 Claude가 전사 내용에서 자동 추출(AI 사용 시)하거나 "날짜 회의"로 표시됩니다.
+   - `summary`는 `ANTHROPIC_API_KEY`를 안 쓸 때만 사용되어, 전사록 원문만 덩그러니 저장되는 대신
+     PLAUD가 이미 만들어준 요약을 회의 내용에 같이 담아줍니다.
+4. `rp.yml` 워크플로우가 전사를 받아 Claude로 구조화(또는 AI 미사용 시 위 필드들을 그대로 사용) →
+   `template.xlsx` 양식 그대로 채워 Supabase에 저장합니다.
 5. `dashboard/minutes`에서 결과를 바로 확인/다운로드할 수 있습니다. 새로 생성된 회의록은 항상
    최상단에 추가됩니다 (최신순 정렬).
 
