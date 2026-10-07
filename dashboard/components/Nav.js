@@ -34,9 +34,14 @@ export default function Nav({ dark = false }) {
             회의록
           </Link>
           {loggedIn ? (
-            <button type="button" className="nav-logout" onClick={handleLogout}>
-              로그아웃
-            </button>
+            <>
+              <Link href="/account" className={pathname === "/account" ? "active" : ""}>
+                계정
+              </Link>
+              <button type="button" className="nav-logout" onClick={handleLogout}>
+                로그아웃
+              </button>
+            </>
           ) : (
             <Link href="/login" className={pathname === "/login" ? "active" : ""}>
               로그인

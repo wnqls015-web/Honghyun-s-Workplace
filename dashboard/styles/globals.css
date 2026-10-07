@@ -505,6 +505,11 @@ h1, h2, h3, h4, p {
   color: #ff3b30;
 }
 
+.login-success {
+  font-size: 13px;
+  color: #34c759;
+}
+
 .login-submit {
   justify-content: center;
   margin-top: 4px;
