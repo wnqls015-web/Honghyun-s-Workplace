@@ -32,15 +32,6 @@ export default function Minutes() {
     fetchReports();
   }, [session]);
 
-  if (!session) {
-    return (
-      <>
-        <Nav />
-        <p className="state-text">로그인 확인 중...</p>
-      </>
-    );
-  }
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return reports.filter((r) => {
@@ -54,6 +45,15 @@ export default function Minutes() {
       return haystack.includes(q);
     });
   }, [reports, search, category]);
+
+  if (!session) {
+    return (
+      <>
+        <Nav />
+        <p className="state-text">로그인 확인 중...</p>
+      </>
+    );
+  }
 
   return (
     <>
