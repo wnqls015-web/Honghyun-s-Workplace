@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Nav from "../components/Nav";
+import MiniCalendar from "../components/MiniCalendar";
 import { supabase } from "../lib/supabase";
 import { useAuthGuard } from "../lib/useAuthGuard";
 
@@ -16,6 +17,7 @@ export default function Minutes() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("전체");
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
     if (!session) return;
@@ -32,9 +34,14 @@ export default function Minutes() {
     fetchReports();
   }, [session]);
 
+  const reportDates = useMemo(() => {
+    return new Set(reports.map((r) => r.meeting_date).filter(Boolean));
+  }, [reports]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return reports.filter((r) => {
+      if (selectedDate && r.meeting_date !== selectedDate) return false;
       const matchesCategory = category === "전체" || (r.category || "기타") === category;
       if (!matchesCategory) return false;
       if (!q) return true;
@@ -44,7 +51,7 @@ export default function Minutes() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [reports, search, category]);
+  }, [reports, search, category, selectedDate]);
 
   if (!session) {
     return (
@@ -67,35 +74,46 @@ export default function Minutes() {
         </p>
       </header>
 
-      <main className="section">
+      <main className="section minutes-layout">
         {!loading && reports.length > 0 && (
-          <div className="filters">
-            <input
-              type="text"
-              className="search-input"
-              placeholder="회의명 또는 날짜로 검색"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+          <aside className="minutes-sidebar">
+            <MiniCalendar
+              reportDates={reportDates}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
             />
-            <div className="filter-tabs">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`filter-tab${category === c ? " active" : ""}`}
-                  onClick={() => setCategory(c)}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
+          </aside>
         )}
 
-        {loading && <p className="state-text">불러오는 중...</p>}
+        <div className="minutes-content">
+          {!loading && reports.length > 0 && (
+            <div className="filters">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="회의명 또는 날짜로 검색"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <div className="filter-tabs">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`filter-tab${category === c ? " active" : ""}`}
+                    onClick={() => setCategory(c)}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-        {!loading && (
-          <div className="card-list">
+          {loading && <p className="state-text">불러오는 중...</p>}
+
+          {!loading && (
+            <div className="card-list">
             {filtered.map((r) => {
               const raw = isRawTranscript(r);
               return (
@@ -188,7 +206,8 @@ export default function Minutes() {
 
         {!loading && reports.length === 0 && (
           <p className="state-text">아직 생성된 회의록이 없습니다.</p>
-        )}
+          )}
+        </div>
       </main>
     </>
   );
