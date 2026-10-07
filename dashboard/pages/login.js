@@ -14,13 +14,22 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setError("이메일 또는 비밀번호가 올바르지 않습니다.");
-      return;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(
+          error.message === "Invalid login credentials"
+            ? "이메일 또는 비밀번호가 올바르지 않습니다."
+            : `로그인 실패: ${error.message}`
+        );
+        return;
+      }
+      router.push("/minutes");
+    } catch (e) {
+      setError(`연결 실패: ${e.message} (Supabase 설정을 확인해 주세요)`);
+    } finally {
+      setLoading(false);
     }
-    router.push("/minutes");
   }
 
   return (
