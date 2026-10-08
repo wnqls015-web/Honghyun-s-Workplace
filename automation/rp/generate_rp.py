@@ -5,7 +5,9 @@ Supabase Storage에 업로드 + rp_reports 테이블에 메타데이터를 저�
 
 구조화에 쓰는 AI는 우선순위대로 선택된다:
     1. ANTHROPIC_API_KEY가 있으면 Claude 사용
-    2. 없고 GITHUB_TOKEN이 있으면 GitHub Models(무료, openai/gpt-4o-mini) 사용
+    2. 없고 RP_GITHUB_MODELS_RESPONSE가 있으면 그 내용을 사용 — 이건 rp.yml의
+       actions/ai-inference 스텝(GitHub Models, 무료, GITHUB_TOKEN으로 인증)이
+       이미 호출해서 넘겨준 결과다. 이 스크립트가 직접 네트워크 요청을 하지 않는다.
     3. 둘 다 없으면 AI 정리 없이 전사록 원문을 그대로 저장 (build_raw_data)
 
 사용 예:
@@ -13,7 +15,7 @@ Supabase Storage에 업로드 + rp_reports 테이블에 메타데이터를 저�
 
 환경변수 (.env):
     ANTHROPIC_API_KEY (선택)
-    GITHUB_TOKEN (선택, GitHub Actions에서는 secrets.GITHUB_TOKEN으로 자동 제공)
+    RP_GITHUB_MODELS_RESPONSE (선택, GitHub Actions에서 자동 설정됨)
     SUPABASE_URL
     SUPABASE_SERVICE_KEY
 """
@@ -24,7 +26,6 @@ import json
 import hashlib
 import argparse
 import smtplib
-import subprocess
 from copy import copy
 from datetime import date
 from email.message import EmailMessage
@@ -106,75 +107,6 @@ def call_claude_for_structure(transcript: str) -> dict:
         ],
     )
     return parse_structured_response(message.content[0].text)
-
-
-# GitHub Actions 환경에 기본 제공되는 GITHUB_TOKEN으로 호출하는 무료 추론 API.
-# ANTHROPIC_API_KEY가 없어도 전사록 전체를 AI로 구조화할 수 있도록 하는 폴백.
-GITHUB_MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
-GITHUB_MODELS_MODEL = "openai/gpt-4o-mini"
-
-
-def call_github_models_for_structure(transcript: str) -> dict:
-    # urllib.request는 301/302 리다이렉트를 따라갈 때 POST를 GET으로 바꿔버려
-    # (body가 사라지고 엉뚱한 응답을 받게 됨), GitHub 공식 quickstart가 예시로 쓰는
-    # curl(-L, POST 그대로 유지)로 직접 호출한다.
-    payload = {
-        "model": GITHUB_MODELS_MODEL,
-        "messages": [
-            {"role": "system", "content": STRUCTURE_SYSTEM_PROMPT},
-            {"role": "user", "content": f"다음 회의 전사록을 정리해줘:\n\n{transcript}"},
-        ],
-        "temperature": 0.3,
-    }
-    # curl도 기본값으로는 301/302/303에서 POST -> GET으로 바꾸므로(urllib와 동일한 함정)
-    # --post301/--post302/--post303으로 POST를 유지시킨다. 그래도 실패하면 -w로 받은
-    # 리다이렉트 메타정보를 에러 메시지에 남겨 다음 디버깅 때 바로 원인을 알 수 있게 한다.
-    meta_marker = "___CURL_META___"
-    try:
-        proc = subprocess.run(
-            [
-                "curl", "-sS", "-L", "--post301", "--post302", "--post303",
-                "--fail-with-body", "-X", "POST",
-                GITHUB_MODELS_ENDPOINT,
-                "-H", f"Authorization: Bearer {os.environ['GITHUB_TOKEN']}",
-                "-H", "Content-Type: application/json",
-                "-H", "Accept: application/vnd.github+json",
-                "-H", "X-GitHub-Api-Version: 2022-11-28",
-                "--data-binary", json.dumps(payload),
-                "-w", f"\n{meta_marker} http_code=%{{http_code}} num_redirects=%{{num_redirects}} redirect_url=%{{redirect_url}}\n",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError("GitHub Models 요청 시간 초과") from e
-
-    stdout = proc.stdout
-    meta = ""
-    if meta_marker in stdout:
-        stdout, _, meta = stdout.partition(meta_marker)
-        meta = meta.strip()
-
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"GitHub Models 요청 실패 (curl exit {proc.returncode}, {meta}): {(proc.stderr or stdout)[:1000]}"
-        )
-
-    try:
-        body = json.loads(stdout)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"GitHub Models 응답이 JSON이 아님 ({meta}): {stdout[:1000]!r}") from e
-
-    try:
-        content = body["choices"][0]["message"]["content"]
-    except (KeyError, IndexError) as e:
-        raise RuntimeError(f"GitHub Models 응답 형식이 예상과 다름: {json.dumps(body)[:1000]}") from e
-
-    try:
-        return parse_structured_response(content)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"GitHub Models가 JSON이 아닌 내용을 반환함: {content[:1000]!r}") from e
 
 
 def guess_category(title: str) -> str:
@@ -431,14 +363,15 @@ def main():
     with open(args.input, "r", encoding="utf-8") as f:
         transcript = f.read()
 
+    github_models_response = os.environ.get("RP_GITHUB_MODELS_RESPONSE")
     if os.environ.get("ANTHROPIC_API_KEY"):
         data = call_claude_for_structure(transcript)
-    elif os.environ.get("GITHUB_TOKEN"):
-        print("ℹ️ ANTHROPIC_API_KEY가 없어 GitHub Models(무료)로 전사록을 정리합니다.")
+    elif github_models_response:
+        print("ℹ️ ANTHROPIC_API_KEY가 없어 GitHub Models(무료)로 정리된 결과를 사용합니다.")
         try:
-            data = call_github_models_for_structure(transcript)
+            data = parse_structured_response(github_models_response)
         except Exception as e:
-            print(f"⚠️ GitHub Models 처리 실패, AI 정리 없이 원문 그대로 저장합니다: {e}")
+            print(f"⚠️ GitHub Models 응답 파싱 실패, AI 정리 없이 원문 그대로 저장합니다: {e}")
             data = build_raw_data(
                 transcript, args.date, title=args.title, attendees=args.attendees, summary=args.summary
             )
