@@ -126,16 +126,22 @@ def call_github_models_for_structure(transcript: str) -> dict:
         ],
         "temperature": 0.3,
     }
+    # curl도 기본값으로는 301/302/303에서 POST -> GET으로 바꾸므로(urllib와 동일한 함정)
+    # --post301/--post302/--post303으로 POST를 유지시킨다. 그래도 실패하면 -w로 받은
+    # 리다이렉트 메타정보를 에러 메시지에 남겨 다음 디버깅 때 바로 원인을 알 수 있게 한다.
+    meta_marker = "___CURL_META___"
     try:
         proc = subprocess.run(
             [
-                "curl", "-sS", "-L", "--fail-with-body", "-X", "POST",
+                "curl", "-sS", "-L", "--post301", "--post302", "--post303",
+                "--fail-with-body", "-X", "POST",
                 GITHUB_MODELS_ENDPOINT,
                 "-H", f"Authorization: Bearer {os.environ['GITHUB_TOKEN']}",
                 "-H", "Content-Type: application/json",
                 "-H", "Accept: application/vnd.github+json",
                 "-H", "X-GitHub-Api-Version: 2022-11-28",
                 "--data-binary", json.dumps(payload),
+                "-w", f"\n{meta_marker} http_code=%{{http_code}} num_redirects=%{{num_redirects}} redirect_url=%{{redirect_url}}\n",
             ],
             capture_output=True,
             text=True,
@@ -144,15 +150,21 @@ def call_github_models_for_structure(transcript: str) -> dict:
     except subprocess.TimeoutExpired as e:
         raise RuntimeError("GitHub Models 요청 시간 초과") from e
 
+    stdout = proc.stdout
+    meta = ""
+    if meta_marker in stdout:
+        stdout, _, meta = stdout.partition(meta_marker)
+        meta = meta.strip()
+
     if proc.returncode != 0:
         raise RuntimeError(
-            f"GitHub Models 요청 실패 (curl exit {proc.returncode}): {(proc.stderr or proc.stdout)[:1000]}"
+            f"GitHub Models 요청 실패 (curl exit {proc.returncode}, {meta}): {(proc.stderr or stdout)[:1000]}"
         )
 
     try:
-        body = json.loads(proc.stdout)
+        body = json.loads(stdout)
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"GitHub Models 응답이 JSON이 아님: {proc.stdout[:1000]!r}") from e
+        raise RuntimeError(f"GitHub Models 응답이 JSON이 아님 ({meta}): {stdout[:1000]!r}") from e
 
     try:
         content = body["choices"][0]["message"]["content"]
