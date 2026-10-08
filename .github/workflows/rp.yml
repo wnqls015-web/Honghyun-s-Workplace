@@ -68,10 +68,12 @@ jobs:
           else
             printf '%s' "이것은 수동 실행 테스트용 샘플 전사록입니다. 오늘 회의 안건은 A이고, 다음 주까지 B를 완료하기로 했습니다." > transcript.txt
           fi
+          EOF_MARKER="RP_EOF_$(date +%s%N)_$RANDOM"
           {
-            echo "TRANSCRIPT_CONTENT<<RP_TRANSCRIPT_EOF"
+            echo "TRANSCRIPT_CONTENT<<$EOF_MARKER"
             cat transcript.txt
-            echo "RP_TRANSCRIPT_EOF"
+            echo
+            echo "$EOF_MARKER"
           } >> "$GITHUB_ENV"
 
       # ANTHROPIC_API_KEY가 없을 때만 실행. GitHub가 공식 유지보수하는 액션이라
