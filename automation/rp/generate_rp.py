@@ -135,12 +135,30 @@ def call_github_models_for_structure(transcript: str) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+            status = resp.status
+            raw_body = resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"GitHub Models 요청 실패 ({e.code}): {detail}") from e
+        raise RuntimeError(f"GitHub Models 요청 실패 ({e.code}): {detail[:1000]}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"GitHub Models 연결 실패: {e}") from e
 
-    return parse_structured_response(body["choices"][0]["message"]["content"])
+    try:
+        body = json.loads(raw_body)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"GitHub Models 응답이 JSON이 아님 (HTTP {status}): {raw_body[:1000]!r}"
+        ) from e
+
+    try:
+        content = body["choices"][0]["message"]["content"]
+    except (KeyError, IndexError) as e:
+        raise RuntimeError(f"GitHub Models 응답 형식이 예상과 다름: {json.dumps(body)[:1000]}") from e
+
+    try:
+        return parse_structured_response(content)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"GitHub Models가 JSON이 아닌 내용을 반환함: {content[:1000]!r}") from e
 
 
 def guess_category(title: str) -> str:
