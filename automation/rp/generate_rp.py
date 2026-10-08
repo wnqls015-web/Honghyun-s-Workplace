@@ -24,8 +24,7 @@ import json
 import hashlib
 import argparse
 import smtplib
-import urllib.request
-import urllib.error
+import subprocess
 from copy import copy
 from datetime import date
 from email.message import EmailMessage
@@ -116,6 +115,9 @@ GITHUB_MODELS_MODEL = "openai/gpt-4o-mini"
 
 
 def call_github_models_for_structure(transcript: str) -> dict:
+    # urllib.request는 301/302 리다이렉트를 따라갈 때 POST를 GET으로 바꿔버려
+    # (body가 사라지고 엉뚱한 응답을 받게 됨), GitHub 공식 quickstart가 예시로 쓰는
+    # curl(-L, POST 그대로 유지)로 직접 호출한다.
     payload = {
         "model": GITHUB_MODELS_MODEL,
         "messages": [
@@ -124,33 +126,33 @@ def call_github_models_for_structure(transcript: str) -> dict:
         ],
         "temperature": 0.3,
     }
-    req = urllib.request.Request(
-        GITHUB_MODELS_ENDPOINT,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            status = resp.status
-            raw_body = resp.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"GitHub Models 요청 실패 ({e.code}): {detail[:1000]}") from e
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"GitHub Models 연결 실패: {e}") from e
+        proc = subprocess.run(
+            [
+                "curl", "-sS", "-L", "--fail-with-body", "-X", "POST",
+                GITHUB_MODELS_ENDPOINT,
+                "-H", f"Authorization: Bearer {os.environ['GITHUB_TOKEN']}",
+                "-H", "Content-Type: application/json",
+                "-H", "Accept: application/vnd.github+json",
+                "-H", "X-GitHub-Api-Version: 2022-11-28",
+                "--data-binary", json.dumps(payload),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("GitHub Models 요청 시간 초과") from e
+
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"GitHub Models 요청 실패 (curl exit {proc.returncode}): {(proc.stderr or proc.stdout)[:1000]}"
+        )
 
     try:
-        body = json.loads(raw_body)
+        body = json.loads(proc.stdout)
     except json.JSONDecodeError as e:
-        raise RuntimeError(
-            f"GitHub Models 응답이 JSON이 아님 (HTTP {status}): {raw_body[:1000]!r}"
-        ) from e
+        raise RuntimeError(f"GitHub Models 응답이 JSON이 아님: {proc.stdout[:1000]!r}") from e
 
     try:
         content = body["choices"][0]["message"]["content"]
