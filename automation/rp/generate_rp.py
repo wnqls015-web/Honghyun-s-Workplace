@@ -130,6 +130,8 @@ def call_github_models_for_structure(transcript: str) -> dict:
         headers={
             "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
             "Content-Type": "application/json",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
         },
         method="POST",
     )
