@@ -1,13 +1,19 @@
 """
-회의 전사(transcript)를 받아 Claude API로 회의록 항목을 구조화 추출하고,
+회의 전사(transcript)를 받아 AI로 회의록 항목을 구조화 추출하고,
 사내 표준 회의록 양식(template.xlsx)을 그대로 채운 .xlsx 리포트(RP)를 생성한 뒤
 Supabase Storage에 업로드 + rp_reports 테이블에 메타데이터를 저장하는 스크립트.
+
+구조화에 쓰는 AI는 우선순위대로 선택된다:
+    1. ANTHROPIC_API_KEY가 있으면 Claude 사용
+    2. 없고 GITHUB_TOKEN이 있으면 GitHub Models(무료, openai/gpt-4o-mini) 사용
+    3. 둘 다 없으면 AI 정리 없이 전사록 원문을 그대로 저장 (build_raw_data)
 
 사용 예:
     python generate_rp.py --input transcript.txt --title "주간업무보고 회의"
 
 환경변수 (.env):
-    ANTHROPIC_API_KEY
+    ANTHROPIC_API_KEY (선택)
+    GITHUB_TOKEN (선택, GitHub Actions에서는 secrets.GITHUB_TOKEN으로 자동 제공)
     SUPABASE_URL
     SUPABASE_SERVICE_KEY
 """
@@ -18,6 +24,8 @@ import json
 import hashlib
 import argparse
 import smtplib
+import urllib.request
+import urllib.error
 from copy import copy
 from datetime import date
 from email.message import EmailMessage
@@ -58,27 +66,39 @@ def storage_safe_key(name: str) -> str:
     return key[:80]
 
 
+STRUCTURE_SYSTEM_PROMPT = (
+    "너는 회의 전사록을 읽고 사내 표준 회의록 양식에 맞춰 항목을 구조화하는 비서야. "
+    "원문에 없는 내용을 지어내지 말고, 불확실한 항목은 그대로 '확인 필요'라고 표기해. "
+    "반드시 아래 JSON 스키마 형식으로만, 다른 설명 없이 응답해:\n"
+    "{\n"
+    '  "meeting_name": "회의명",\n'
+    '  "datetime": "일시",\n'
+    '  "location": "장소",\n'
+    '  "author": "작성자",\n'
+    '  "attendees": "참석자 (명단/역할)",\n'
+    f'  "category": "다음 중 가장 알맞은 하나: {", ".join(MEETING_CATEGORIES)}",\n'
+    '  "agenda_items": [{"agenda": "안건", "discussion": "논의 내용 (핵심만 불릿 형태로)"}],\n'
+    '  "instructions": [{"instruction": "지시사항", "owner": "담당자", "note": "비고(기한 등)"}]\n'
+    "}"
+)
+
+
+def parse_structured_response(raw_text: str) -> dict:
+    raw = raw_text.strip()
+    raw = re.sub(r"^```(json)?|```$", "", raw, flags=re.MULTILINE).strip()
+    data = json.loads(raw)
+    if data.get("category") not in MEETING_CATEGORIES:
+        data["category"] = "기타"
+    return data
+
+
 def call_claude_for_structure(transcript: str) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     message = client.messages.create(
         model="claude-sonnet-5",
         max_tokens=4000,
-        system=(
-            "너는 회의 전사록을 읽고 사내 표준 회의록 양식에 맞춰 항목을 구조화하는 비서야. "
-            "원문에 없는 내용을 지어내지 말고, 불확실한 항목은 그대로 '확인 필요'라고 표기해. "
-            "반드시 아래 JSON 스키마 형식으로만, 다른 설명 없이 응답해:\n"
-            "{\n"
-            '  "meeting_name": "회의명",\n'
-            '  "datetime": "일시",\n'
-            '  "location": "장소",\n'
-            '  "author": "작성자",\n'
-            '  "attendees": "참석자 (명단/역할)",\n'
-            f'  "category": "다음 중 가장 알맞은 하나: {", ".join(MEETING_CATEGORIES)}",\n'
-            '  "agenda_items": [{"agenda": "안건", "discussion": "논의 내용 (핵심만 불릿 형태로)"}],\n'
-            '  "instructions": [{"instruction": "지시사항", "owner": "담당자", "note": "비고(기한 등)"}]\n'
-            "}"
-        ),
+        system=STRUCTURE_SYSTEM_PROMPT,
         messages=[
             {
                 "role": "user",
@@ -86,12 +106,41 @@ def call_claude_for_structure(transcript: str) -> dict:
             }
         ],
     )
-    raw = message.content[0].text.strip()
-    raw = re.sub(r"^```(json)?|```$", "", raw, flags=re.MULTILINE).strip()
-    data = json.loads(raw)
-    if data.get("category") not in MEETING_CATEGORIES:
-        data["category"] = "기타"
-    return data
+    return parse_structured_response(message.content[0].text)
+
+
+# GitHub Actions 환경에 기본 제공되는 GITHUB_TOKEN으로 호출하는 무료 추론 API.
+# ANTHROPIC_API_KEY가 없어도 전사록 전체를 AI로 구조화할 수 있도록 하는 폴백.
+GITHUB_MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
+GITHUB_MODELS_MODEL = "openai/gpt-4o-mini"
+
+
+def call_github_models_for_structure(transcript: str) -> dict:
+    payload = {
+        "model": GITHUB_MODELS_MODEL,
+        "messages": [
+            {"role": "system", "content": STRUCTURE_SYSTEM_PROMPT},
+            {"role": "user", "content": f"다음 회의 전사록을 정리해줘:\n\n{transcript}"},
+        ],
+        "temperature": 0.3,
+    }
+    req = urllib.request.Request(
+        GITHUB_MODELS_ENDPOINT,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"GitHub Models 요청 실패 ({e.code}): {detail}") from e
+
+    return parse_structured_response(body["choices"][0]["message"]["content"])
 
 
 def guess_category(title: str) -> str:
@@ -350,6 +399,15 @@ def main():
 
     if os.environ.get("ANTHROPIC_API_KEY"):
         data = call_claude_for_structure(transcript)
+    elif os.environ.get("GITHUB_TOKEN"):
+        print("ℹ️ ANTHROPIC_API_KEY가 없어 GitHub Models(무료)로 전사록을 정리합니다.")
+        try:
+            data = call_github_models_for_structure(transcript)
+        except Exception as e:
+            print(f"⚠️ GitHub Models 처리 실패, AI 정리 없이 원문 그대로 저장합니다: {e}")
+            data = build_raw_data(
+                transcript, args.date, title=args.title, attendees=args.attendees, summary=args.summary
+            )
     else:
         print("⚠️ ANTHROPIC_API_KEY가 없어 AI 정리 없이 전사록 원문을 그대로 저장합니다.")
         data = build_raw_data(transcript, args.date, title=args.title, attendees=args.attendees, summary=args.summary)

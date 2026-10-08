@@ -39,7 +39,10 @@
    python generate_rp.py --input transcript.txt --title "주간업무보고 회의"
    ```
 4. **GitHub Secrets 등록** (repo Settings → Secrets and variables → Actions)
-   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_API_KEY` (선택 — 없어도 됨. 등록하지 않으면 **GitHub Models(무료)** 로
+     자동 전환되어 전사록을 AI가 구조화합니다. 별도 가입/키 발급 없이 `rp.yml`에 이미
+     설정되어 있는 `permissions: models: read`만으로 동작하며, 추가 비용이 없습니다.
+     `ANTHROPIC_API_KEY`를 등록하면 그게 우선 사용됩니다.)
    - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (Supabase 저장을 쓸 경우)
    - `SMTP_USER`, `SMTP_PASSWORD`, `RP_EMAIL_TO` (생성된 회의록을 이메일로 받고 싶을 경우, 아래 참고)
 5. **대시보드 배포**
@@ -141,11 +144,12 @@ Plaud는 Zapier에서 **트리거 전용 앱**으로 제공됩니다(Plaud → �
      ```
    - `transcript`만 필수입니다. 나머지(`title`/`attendees`/`summary`)는 PLAUD 트리거 단계에서
      해당 필드가 있으면 Input Data에 매핑해서 같이 보내세요 — 없으면 그냥 생략해도 됩니다.
-   - `title`을 안 보내면 Claude가 전사 내용에서 자동 추출(AI 사용 시)하거나 "날짜 회의"로 표시됩니다.
-   - `summary`는 `ANTHROPIC_API_KEY`를 안 쓸 때만 사용되어, 전사록 원문만 덩그러니 저장되는 대신
-     PLAUD가 이미 만들어준 요약을 회의 내용에 같이 담아줍니다.
-4. `rp.yml` 워크플로우가 전사를 받아 Claude로 구조화(또는 AI 미사용 시 위 필드들을 그대로 사용) →
-   `template.xlsx` 양식 그대로 채워 Supabase에 저장합니다.
+   - `title`을 안 보내면 AI(Claude 또는 GitHub Models)가 전사 내용에서 자동 추출하거나
+     "날짜 회의"로 표시됩니다.
+   - `summary`는 AI를 전혀 안 쓸 때(Claude도 GitHub Models도 없을 때)만 사용되어, 전사록
+     원문만 덩그러니 저장되는 대신 PLAUD가 이미 만들어준 요약을 회의 내용에 같이 담아줍니다.
+4. `rp.yml` 워크플로우가 전사를 받아 AI(Claude 또는 무료인 GitHub Models)로 구조화(또는 둘 다
+   없으면 위 필드들을 그대로 사용) → `template.xlsx` 양식 그대로 채워 Supabase에 저장합니다.
 5. `dashboard/minutes`에서 결과를 바로 확인/다운로드할 수 있습니다. 새로 생성된 회의록은 항상
    최상단에 추가됩니다 (최신순 정렬).
 
